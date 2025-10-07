@@ -13,7 +13,7 @@ const SocketHandler = (req, res) => {
 
     // 1. Initialize the Socket.io Server
     const io = new Server(res.socket.server, {
-        path: '/api/socket', // IMPORTANT: Match this path with the client's connection path
+        path: '/api/socket', 
         addTrailingSlash: false,
     });
 

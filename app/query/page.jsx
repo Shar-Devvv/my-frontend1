@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import io from 'socket.io-client';
 import { Send, MessageSquare, Loader, CornerDownLeft, Zap } from 'lucide-react';
+import Navbar from '@/components/Navbar';
 
 const PRIMARY_BLUE = '#1e40af'; // Tailwind blue-700
 // Note: AGENT_ID must match the ID used in the backend to identify recruiter messages
@@ -19,6 +20,7 @@ const MessageBubble = ({ message, isCurrentUser }) => {
     const senderInitial = isAgent ? 'R' : 'U';
 
     return (
+        <>
         <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
             <div className={`flex items-start max-w-lg space-x-2 ${isCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
                 {/* Avatar/Initial */}
@@ -41,8 +43,10 @@ const MessageBubble = ({ message, isCurrentUser }) => {
                 </div>
             </div>
         </div>
+        </>
     );
 };
+
 
 // Main Next.js Page Component
 export default function LiveChatPage() {
@@ -142,6 +146,7 @@ export default function LiveChatPage() {
     return (
         <div className="min-h-screen bg-gray-50 antialiased font-sans flex items-center justify-center p-4">
             <div className="w-full max-w-3xl bg-white shadow-2xl rounded-xl flex flex-col h-[90vh] max-h-[850px] overflow-hidden">
+           <Navbar/>
                 
                 {/* Header */}
                 <div className="p-5 border-b flex items-center justify-between shadow-md" style={{ backgroundColor: PRIMARY_BLUE }}>
@@ -206,5 +211,6 @@ export default function LiveChatPage() {
 
             </div>
         </div>
+        
     );
 }
