@@ -1,6 +1,7 @@
 "use client"
 import { useState} from 'react';
-import { useEffect } from 'react';
+import { useEffect} from 'react';
+import { useSession, signOut } from "next-auth/react";
 // FIX: Using dynamic import or a script tag is usually required in restricted environments
 // For this environment, we will comment out the import statement to proceed 
 // and assume jsPDF is globally available (e.g., loaded via a script tag).
@@ -10,6 +11,8 @@ import { jsPDF } from "jspdf";
 // import About from './Pages/About';
 import Link from 'next/link';
 import Recruiter from "../components/recruiter";
+import SignupPage from './signup/page';
+
 
 // Constants
 const API_BASE_URL = "https://my-backend-wo75.onrender.com";
@@ -464,7 +467,7 @@ const addExperience = (doc, y_start, margin, text_color_dark) => {
 };
 
 
-
+ const { data: session } = useSession();
 
   return (
     <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#f9fafb', minHeight: '100vh', padding: '20px' }}>
@@ -526,7 +529,61 @@ const addExperience = (doc, y_start, margin, text_color_dark) => {
   ☰
 </button>
 
-<Link href={"query"}><button className='relative hover:cursor-pointer bg-gray-400 text-white p-1 left-[67%] rounded-md bottom-[18.5%]'>Contact A Recruiter</button></Link>
+
+<div className="flex items-center space-x-4 p-1 bg-[#f9fafb] relative bottom-[23.5%] text-white  justify-end">
+        
+        {/* Custom Alert (for mock signOut) */}
+        <div id="custom-alert" className="fixed top-4 right-4 bg-yellow-500 text-white p-3 rounded-lg shadow-xl z-50 transition-opacity duration-500 opacity-90 hidden">
+            Alert Message
+        </div>
+
+        {/* 1. Contact Recruiter Button */}
+        <Link href={"/query"}>
+          <button 
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition duration-200 hover:scale-[1.03]"
+          >
+            Contact A Recruiter
+          </button>
+        </Link>
+
+        {/* 2. Authentication Block (Login/Logout/Signup) */}
+        <div className="flex items-center space-x-3">
+          
+          {/* Conditional rendering for Logged IN state */}
+          {session?.user ? (
+            <>
+              <span className="text-sm text-gray-300 font-semibold">
+                Hello, {session.user.name}
+              </span>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-md transition duration-200 hover:cursor-pointer"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            // Conditional rendering for Logged OUT state (using !session?.user)
+            <>
+                <Link href="/signup">
+                    <button 
+                      className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition duration-200"
+                    >
+                      Signup
+                    </button>
+                </Link>
+                
+                <Link href={"/login"}>
+                    <button 
+                        className="bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-2 rounded-lg text-sm font-medium transition duration-200"
+                    >
+                        Login
+                    </button>
+                </Link>
+            </>
+          )}
+        </div>
+      </div>
 
 
    

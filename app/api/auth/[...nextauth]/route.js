@@ -1,53 +1,74 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { connectToDB } from "@/lib/mongodb";
+import User from "@/lib/userModel";
+import bcrypt from "bcryptjs";
 
-/**
- * NextAuth configuration object.
- * Defines providers, secret, and callbacks.
- */
 const handler = NextAuth({
-  // 1. Configure one or more authentication providers
   providers: [
+    // 🟦 GOOGLE LOGIN
     GoogleProvider({
-      // These keys are automatically read from environment variables:
-      // GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
-    // Add other providers (GitHub, Facebook, etc.) here if needed
+
+    // 🟨 CREDENTIALS LOGIN (EMAIL + PASSWORD)
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email", placeholder: "you@example.com" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const { email, password } = credentials;
+
+        await connectToDB();
+        const user = await User.findOne({ email });
+        if (!user) throw new Error("No user found with this email");
+
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) throw new Error("Invalid password");
+
+        return { id: user._id, name: user.name, email: user.email };
+      },
+    }),
   ],
 
-  // 2. Define the secret used to sign the session cookie.
-  // This is read from the NEXTAUTH_SECRET environment variable.
   secret: process.env.NEXTAUTH_SECRET,
-  
-  // 3. Define optional callbacks for custom session handling (recommended)
+
+  session: {
+    strategy: "jwt",
+  },
+
   callbacks: {
-    // Modify the session object before it is returned to the client
-    async session({ session, token }) {
-      // You can add custom properties to the session object here.
-      // For instance, adding the user ID from the token:
-      if (token?.sub) {
-        session.user.id = token.sub; 
-      }
-      return session;
-    },
-    // Modify the JWT token after sign-in, before it is saved
-    async jwt({ token, user }) {
-      // Add profile information (like user ID) to the token right after sign-in
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
       }
       return token;
     },
+    async session({ session, token }) {
+      if (token?.id) session.user.id = token.id;
+      return session;
+    },
+    async signIn({ user, account }) {
+      // If Google login, ensure user exists in DB
+      if (account?.provider === "google") {
+        await connectToDB();
+        const existingUser = await User.findOne({ email: user.email });
+        if (!existingUser) {
+          await User.create({
+            name: user.name,
+            email: user.email,
+            password: "", // Not used for Google
+            provider: "google",
+          });
+        }
+      }
+      return true;
+    },
   },
-  
-  // 4. Customizing the pages (optional but helpful)
-  pages: {
-    // Use this to redirect to a custom sign-in page if you create one
-    // signIn: '/auth/signin',
-  }
 });
 
-// The Next.js App Router expects GET and POST methods to be exported
 export { handler as GET, handler as POST };
