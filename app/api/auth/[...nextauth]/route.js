@@ -4,7 +4,18 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { connectToDB } from "@/lib/mongodb";
 import User from "@/lib/userModel";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+
+function generateAccessToken(user) {
+  return jwt.sign({ id: user.id, email: user.email }, ACCESS_TOKEN_SECRET, { expiresIn: "15m" });
+}
+
+function generateRefreshToken(user) {
+  return jwt.sign({ id: user.id, email: user.email }, REFRESH_TOKEN_SECRET, { expiresIn: "10d" });
+}
 const handler = NextAuth({
   providers: [
     // 🟦 GOOGLE LOGIN
@@ -44,13 +55,17 @@ const handler = NextAuth({
   callbacks: {
     async jwt({ token, user, account }) {
       if (user) {
-        token.id = user.id;
-      }
+        token.accessToken = generateAccessToken(user);
+      token.refreshToken = generateRefreshToken(user);
+      token.accessTokenExpires = Date.now() + 15 * 60 * 1000; // 15 min
+    }
       return token;
     },
     async session({ session, token }) {
-      if (token?.id) session.user.id = token.id;
-      return session;
+      session.user.id = token.id;
+    session.accessToken = token.accessToken;   // use in frontend API calls
+    session.refreshToken = token.refreshToken; // store securely for refresh
+    return session;
     },
     async signIn({ user, account }) {
       // If Google login, ensure user exists in DB
