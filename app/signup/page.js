@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "" });
   const [error, setError] = useState("");
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -12,6 +12,11 @@ export default function SignupPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    if (!form.role) {
+      setError("Please select a role");
+      return;
+    }
 
     const res = await fetch("/api/signup", {
       method: "POST",
@@ -32,9 +37,20 @@ export default function SignupPage() {
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md w-96">
         <h2 className="text-2xl font-bold mb-4">Sign Up</h2>
         {error && <p className="text-red-600 mb-2">{error}</p>}
+
         <input name="name" placeholder="Name" value={form.name} onChange={handleChange} className="border p-2 w-full mb-2" />
         <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} className="border p-2 w-full mb-2" />
-        <input name="password" type="password" placeholder="Password" value={form.password} onChange={handleChange} className="border p-2 w-full mb-4" />
+        <input name="password" type="password" placeholder="Password" value={form.password} onChange={handleChange} className="border p-2 w-full mb-2" />
+
+        {/* Role Selection */}
+        <select name="role" value={form.role} onChange={handleChange} className="border p-2 w-full mb-4">
+          <option value="">Select Role</option>
+          <option value="manager">Manager</option>
+          <option value="worker">Worker</option>
+          <option value="employer">Employer</option>
+          <option value="admin">Admin</option>
+        </select>
+
         <button className="bg-indigo-600 text-white py-2 w-full rounded">Sign Up</button>
       </form>
     </div>

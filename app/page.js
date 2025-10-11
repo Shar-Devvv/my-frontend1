@@ -164,7 +164,27 @@ function Page() {
 
   const { message, showMessage, confirmAction, setConfirmAction } = useAppMessages();
 const [sidebarOpen, setSidebarOpen] = useState(false);
+const { data: session,status } = useSession();
+console.log(session?.accessToken);
 
+useEffect(() => {
+  if (status === "authenticated") {
+    console.log("Session:", session);
+
+    // Access token may be inside session.user or session itself depending on your NextAuth config
+    const token = session?.accessToken || session?.user?.accessToken;
+
+    if (token) {
+      fetch("/api/protected", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }).then(res => res.json())
+        .then(data => console.log("Protected data:", data))
+        .catch(err => console.error("Fetch error:", err));
+    }
+  }
+}, [status, session]);
 
 
   // 1. READ: Function to fetch the list of resumes
@@ -199,34 +219,36 @@ const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // 2. DELETE: Function to handle deletion after confirmation
   const executeDelete = async () => {
-    if (!confirmAction) return;
+  if (!confirmAction) return;
 
-    const { id, title } = confirmAction;
-    setConfirmAction(null); // Close the modal immediately
+  const { id, title } = confirmAction;
+  setConfirmAction(null); // Close the modal immediately
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/resumes/${id}`, {
-        method: 'DELETE',
-      });
+  try {
+    const response = await fetch(`${API_BASE_URL}/resumes/${id}`, {
+      method: 'DELETE',
+    });
 
-      if (response.ok) {
-        setResumes(currentResumes => currentResumes.filter(r => r.id !== id));
-        // If the deleted resume was the one currently selected, clear the preview
-        if (selectedResume && selectedResume.id === id) {
-            setSelectedResume(null);
-            setName("");
-            setUploadedImage(null);
-        }
-        showMessage(`Successfully deleted: ${title}.`);
-      } else {
-        showMessage('Failed to delete the resume. The file may no longer exist.');
-        console.error("Delete failed:", response.statusText);
-      }
-    } catch (error) {
-      console.error("Network error during delete:", error.message);
-      showMessage('Network error. Could not connect to the server to delete.');
-    }
-  };
+    if (response.ok) {
+      // ✅ Remove deleted resume from state immediately
+      setResumes(currentResumes => currentResumes.filter(r => r._id !== id && r.id !== id));
+
+      // ✅ Clear preview if it’s the one deleted
+      if (selectedResume && (selectedResume._id === id || selectedResume.id === id)) {
+        setSelectedResume(null);
+        setName("");
+        setUploadedImage(null);
+      }
+
+      showMessage(`Successfully deleted: ${title}.`);
+    } else {
+      showMessage('Failed to delete the resume. The file may no longer exist.');
+    }
+  } catch (error) {
+    console.error("Network error during delete:", error.message);
+    showMessage('Network error. Could not connect to the server to delete.');
+  }
+};
   
   // 3. CREATE: Handle image upload
   const handleClick = async () => {
@@ -467,7 +489,14 @@ const addExperience = (doc, y_start, margin, text_color_dark) => {
 };
 
 
- const { data: session } = useSession();
+ 
+
+
+if (status === "loading") {
+  return <p>Loading...</p>;
+}
+
+// Example: Only call protected API if authenticated
 
   return (
     <div style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#f9fafb', minHeight: '100vh', padding: '20px' }}>
@@ -552,7 +581,7 @@ const addExperience = (doc, y_start, margin, text_color_dark) => {
           {/* Conditional rendering for Logged IN state */}
           {session?.user ? (
             <>
-              <span className="text-sm text-gray-300 font-semibold">
+              <span className="text-sm text-black font-semibold">
                 Hello, {session.user.name}
               </span>
               <button
@@ -561,6 +590,11 @@ const addExperience = (doc, y_start, margin, text_color_dark) => {
               >
                 Logout
               </button>
+              {session?.user && (
+  <>
+    <span className='text-black' style={{ marginLeft: '10px', fontWeight: '600' }}>Role: {session.user.role}</span>
+  </>
+)}
             </>
           ) : (
             // Conditional rendering for Logged OUT state (using !session?.user)
