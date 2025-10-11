@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-const ADMIN_EMAILS = ["hary123@gmail.com"]
+const ADMIN_EMAILS = ["hary123@gmail.com","aman@gmail.com"]
 
 export default function UsersPage() {
   const { data: session, status } = useSession();
