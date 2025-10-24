@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { jsPDF } from "jspdf";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 // --- JODIT EDITOR DYNAMIC IMPORT ---
 const JoditEditor = dynamic(() => import("jodit-react"), { ssr: false });
@@ -134,7 +135,7 @@ function Page() {
       showMessage(`✅ Saved "${name}" successfully!`);
       
       // ✅ Construct the preview URL from uniqueId
-      const previewUrl = `http://localhost:3001/preview/${data.uniqueId}`;
+      const previewUrl = `https://my-frontend1-2hth.vercel.app/preview/${data.uniqueId}`;
       setShareableLink(previewUrl);
       
       setRecents((prev) => [
@@ -372,7 +373,7 @@ function Page() {
             backgroundColor: "#fff",
             borderRadius: 12,
             maxWidth: 1200,
-            margin: "20px auto",
+            margin: "43px auto",
           }}
         >
           {/* LEFT: Editor */}
