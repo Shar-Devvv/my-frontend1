@@ -1,16 +1,11 @@
 "use client"
-import React,{useState} from 'react'
+import React from 'react'
 import KathaIntro from '@/components/KathaIntro'
-const page = () => {
 
-  
+const page = () => {
   return (
     <div>
       <KathaIntro/>
-      
-      <div> 
-
-      </div>  
     </div>
   )
 }
