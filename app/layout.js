@@ -1,7 +1,7 @@
 // This file is the root layout for the Next.js App Router structure.
 import { Inter } from "next/font/google";
 import "./globals.css";
-
+import Hotjar from "@/components/Hotjar";
 import SessionWrapper from "@/components/SessionWrapper";
 import Buttons from "@/components/Buttons";
 
@@ -16,6 +16,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
+        <Hotjar/>
         <link rel="icon" href="/favicon.png"/>
       </head>
       <body className={inter.className}>

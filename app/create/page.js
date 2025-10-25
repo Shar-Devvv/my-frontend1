@@ -7,6 +7,35 @@ import { jsPDF } from "jspdf";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
+// Custom hook for responsive design
+const useResponsive = () => {
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1200,
+    height: typeof window !== 'undefined' ? window.innerHeight : 800,
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return {
+    isMobile: windowSize.width < 768,
+    isTablet: windowSize.width >= 768 && windowSize.width < 1024,
+    isDesktop: windowSize.width >= 1024,
+    windowSize
+  };
+};
+
 // --- JODIT EDITOR DYNAMIC IMPORT ---
 const JoditEditor = dynamic(() => import("jodit-react"), { ssr: false });
 
@@ -88,9 +117,18 @@ const ResumeEditor = ({ initialContent, handleContentChange }) => {
     </div>
   );
 };
+function debounce(fn, delay) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
 
 // --- MAIN PAGE COMPONENT ---
 function Page() {
+  const { isMobile, isTablet, isDesktop } = useResponsive();
   const [editorContent, setEditorContent] = useState(INITIAL_RESUME_HTML);
   const [name, setName] = useState("Your Name Here");
   const [recents, setRecents] = useState([]);
@@ -100,6 +138,15 @@ function Page() {
   const [loadingResumes, setLoadingResumes] = useState(false);
   const { message, showMessage } = useAppMessages();
   const { data: session, status } = useSession();
+  
+
+
+
+
+  const saveDraft = debounce((name, content) => {
+  localStorage.setItem("draftResume", JSON.stringify({ name, content }));
+  console.log("Draft saved!");
+}, 1500); 
 
   // Fetch saved resumes from backend
   const fetchSavedResumes = async () => {
@@ -161,13 +208,61 @@ function Page() {
       setRecents(saved);
     }
   }, [session?.accessToken]);
+  useEffect(() => {
+    if (session) {
+      // Check if there's a draft in localStorage
+      const draft = JSON.parse(localStorage.getItem("draftResume") || "null");
+      if (draft) {
+        setEditorContent(draft.content || INITIAL_RESUME_HTML);
+        setName(draft.name || "Your Name Here");
+  
+        // Optional: auto-save draft to backend
+        const autoSaveDraft = async () => {
+          try {
+            const res = await fetch("https://my-backend-wo75.onrender.com/api/resume/save", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${session.accessToken}`,
+              },
+              body: JSON.stringify({
+                name: draft.name || "My Resume",
+                resumeData: draft.content,
+                userId: session?.user?.id,
+              }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              showMessage(`✅ Draft "${draft.name}" saved successfully!`);
+              setShareableLink(`https://my-frontend1-2hth.vercel.app/preview/${data.uniqueId}`);
+              localStorage.removeItem("draftResume"); // Clear draft after saving
+              fetchSavedResumes(); // Refresh list
+            }
+          } catch (err) {
+            console.error("Failed to auto-save draft:", err);
+          }
+        };
+        autoSaveDraft();
+      }
+    }
+  }, [session]);
+  
 
   // Save to localStorage as backup when recents change
   useEffect(() => {
     localStorage.setItem("savedResumes", JSON.stringify(recents));
   }, [recents]);
 
-  const handleContentChange = (content) => setEditorContent(content);
+  const handleContentChange = (content) => {setEditorContent(content);
+
+    if(!session){
+      saveDraft(name, content);
+      const draft={
+        name,content
+      };
+      localStorage.setItem("draftResume", JSON.stringify(draft));
+    }
+  }
 
   const handleSaveResume = async () => {
     if (!session) {
@@ -260,6 +355,8 @@ function Page() {
       showMessage("⚠️ Failed to save resume. Try again later.");
     }
   };
+
+  const handleSaveResumeDebounced = debounce(handleSaveResume, 2000);
   
   const handleCopyLink = () => {
     if (shareableLink) {
@@ -285,29 +382,51 @@ function Page() {
     });
   };
 
-  if (status === "loading") return <p>Loading...</p>;
+  if (status === "loading") return (
+    <div style={{
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      minHeight: "100vh",
+      fontSize: "1.2rem",
+      color: "#666"
+    }}>
+      Loading...
+    </div>
+  );
 
   return (
     <>
-      {/* ✅ HAMBURGER ICON */}
+      {/* ✅ HAMBURGER ICON - Responsive */}
       <button
         onClick={() => setSidebarOpen(true)}
         style={{
           position: "fixed",
-          top: 20,
-          right: 20,
+          top: "10px",
+          right: "10px",
           background: "white",
           border: "1px solid #ddd",
           borderRadius: "8px",
           padding: "8px 10px",
           cursor: "pointer",
           zIndex: 1000,
+          fontSize: "1.2rem",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.transform = "scale(1.05)";
+          e.target.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.transform = "scale(1)";
+          e.target.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
         }}
       >
         ☰
       </button>
 
-      {/* 📌 SIDEBAR */}
+      {/* 📌 SIDEBAR - Responsive */}
       <motion.div
         initial={{ x: 300 }}
         animate={{ x: sidebarOpen ? 0 : 300 }}
@@ -316,11 +435,11 @@ function Page() {
           position: "fixed",
           top: 0,
           right: 0,
-          width: 260,
+          width: isMobile ? "100vw" : 260,
           height: "100%",
           background: "#111827",
           color: "#fff",
-          padding: "20px 15px",
+          padding: isMobile ? "15px 10px" : "20px 15px",
           boxShadow: "-2px 0 10px rgba(0,0,0,0.2)",
           zIndex: 9999,
           overflowY: "auto",
@@ -474,15 +593,17 @@ function Page() {
         )}
       </motion.div>
 
-      {/* 🧭 MAIN CONTENT */}
+      {/* 🧭 MAIN CONTENT - Responsive */}
       <motion.div
         className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
-        animate={{ marginRight: sidebarOpen ? 260 : 0 }}
+        animate={{ 
+          marginRight: sidebarOpen ? (isMobile ? 0 : 260) : 0 
+        }}
         transition={{ type: "spring", stiffness: 200, damping: 25 }}
         style={{
           fontFamily: "Inter, sans-serif",
           minHeight: "100vh",
-          padding: 20,
+          padding: isMobile ? "10px" : "20px",
         }}
       >
         {message && (
@@ -507,36 +628,47 @@ function Page() {
           className="main shadow-lg border"
           style={{
             display: "flex",
+            flexDirection: isTablet || isMobile ? "column" : "row",
             backgroundColor: "#fff",
             borderRadius: 12,
             maxWidth: 1200,
-            margin: "43px auto",
+            margin: isMobile ? "10px auto" : "43px auto",
+            width: "100%",
+            overflow: "hidden"
           }}
         >
-          {/* LEFT: Editor */}
+          {/* LEFT: Editor - Responsive */}
           <motion.div
             initial={{ x: -100 }}
             animate={{ x: 0 }}
             transition={{ duration: 0.2 }}
             style={{
               flexGrow: 1,
-              padding: 20,
-              borderRight: "1px solid #e5e7eb",
-              minHeight: "80vh",
+              padding: isMobile ? "15px" : "20px",
+              borderRight: isTablet || isMobile ? "none" : "1px solid #e5e7eb",
+              borderBottom: isTablet || isMobile ? "1px solid #e5e7eb" : "none",
+              minHeight: isMobile ? "60vh" : "80vh",
+              width: "100%"
             }}
           >
-            <h2 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: 15 }}>
+            <h2 style={{ 
+              fontSize: isMobile ? "1.2rem" : "1.5rem", 
+              fontWeight: 600, 
+              marginBottom: 15,
+              textAlign: isMobile ? "center" : "left"
+            }}>
               Live Resume Editor (A4 View)
             </h2>
             <motion.div
               whileHover={{ scale: 1.005 }}
               style={{
                 backgroundColor: "#ffffff",
-                padding: 20,
+                padding: isMobile ? "15px" : "20px",
                 border: "1px solid #e5e7eb",
                 borderRadius: 8,
                 boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
-                minHeight: 842,
+                minHeight: isMobile ? 600 : 842,
+                overflow: "auto"
               }}
             >
               <ResumeEditor
@@ -546,19 +678,25 @@ function Page() {
             </motion.div>
           </motion.div>
 
-          {/* RIGHT: Controls */}
+          {/* RIGHT: Controls - Responsive */}
           <motion.div
             initial={{ x: 200 }}
             animate={{ x: 0 }}
             transition={{ duration: 0.2 }}
-            style={{ width: 400, padding: "30px 20px", minHeight: "80vh" }}
+            style={{ 
+              width: isTablet || isMobile ? "100%" : 400, 
+              padding: isMobile ? "20px 15px" : "30px 20px", 
+              minHeight: isMobile ? "auto" : "80vh",
+              backgroundColor: isTablet || isMobile ? "#f8fafc" : "transparent"
+            }}
           >
             <h1
               style={{
-                fontSize: 30,
+                fontSize: isMobile ? "24px" : "30px",
                 fontWeight: 700,
                 color: "#1f2937",
-                marginBottom: 30,
+                marginBottom: isMobile ? "20px" : "30px",
+                textAlign: isMobile ? "center" : "left"
               }}
             >
               Resume Controls
@@ -567,39 +705,51 @@ function Page() {
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) =>{ setName(e.target.value)
+                if(!session){
+                  const draft={
+                    name:e.target.value,
+                    content:editorContent
+                  };
+                  localStorage.setItem("draftResume", JSON.stringify(draft));
+                }
+              }}
               placeholder="Resume Name"
               style={{
                 width: "100%",
-                padding: "10px",
+                padding: isMobile ? "12px" : "10px",
                 borderRadius: 8,
                 border: "1px solid #ccc",
                 marginBottom: 20,
+                fontSize: isMobile ? "16px" : "14px",
+                boxSizing: "border-box"
               }}
             />
 
             <div style={{ marginBottom: 20 }}>
               {session ? (
                 <motion.button
-                  onClick={handleSaveResume}
+                  onClick={handleSaveResumeDebounced}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   style={{
                     width: "100%",
-                    padding: "10px 14px",
+                    padding: isMobile ? "12px 16px" : "10px 14px",
                     borderRadius: 8,
                     border: "none",
                     background: "#3b82f6",
                     color: "#fff",
                     cursor: "pointer",
                     fontWeight: 600,
+                    fontSize: isMobile ? "16px" : "14px",
+                    boxSizing: "border-box"
                   }}
                 >
                   💾 Save Resume
                 </motion.button>
               ) : (
                 <div style={{
-                  padding: "15px",
+                  padding: isMobile ? "20px" : "15px",
                   borderRadius: 8,
                   border: "2px solid #f59e0b",
                   backgroundColor: "#fef3c7",
@@ -608,18 +758,20 @@ function Page() {
                   <p style={{
                     margin: "0 0 10px 0",
                     color: "#92400e",
-                    fontWeight: 600
+                    fontWeight: 600,
+                    fontSize: isMobile ? "16px" : "14px"
                   }}>
                     🔒 Login Required to Save
                   </p>
                   <Link href="/login" style={{
                     display: "inline-block",
-                    padding: "8px 16px",
+                    padding: isMobile ? "12px 20px" : "8px 16px",
                     backgroundColor: "#f59e0b",
                     color: "white",
                     textDecoration: "none",
                     borderRadius: 6,
-                    fontWeight: 600
+                    fontWeight: 600,
+                    fontSize: isMobile ? "16px" : "14px"
                   }}>
                     Login to Save Resume
                   </Link>
