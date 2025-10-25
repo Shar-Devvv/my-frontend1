@@ -1,3 +1,4 @@
+// app/api/auth/route.js
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -9,15 +10,25 @@ import jwt from "jsonwebtoken";
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 
+// --- Generate Access Token ---
 function generateAccessToken(user) {
-  return jwt.sign({ id: user.id, email: user.email }, ACCESS_TOKEN_SECRET, { expiresIn: "15m" });
+  return jwt.sign(
+    { id: user.id.toString(), email: user.email },
+    ACCESS_TOKEN_SECRET,
+    { expiresIn: "15m" }
+  );
 }
 
+// --- Generate Refresh Token ---
 function generateRefreshToken(user) {
-  return jwt.sign({ id: user.id, email: user.email }, REFRESH_TOKEN_SECRET, { expiresIn: "10d" });
+  return jwt.sign(
+    { id: user.id.toString(), email: user.email },
+    REFRESH_TOKEN_SECRET,
+    { expiresIn: "10d" }
+  );
 }
 
-// ✅ Define authOptions as a separate object
+// --- NextAuth Options ---
 export const authOptions = {
   providers: [
     GoogleProvider({
@@ -39,7 +50,12 @@ export const authOptions = {
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) throw new Error("Invalid password");
 
-        return { id: user._id, name: user.name, email: user.email, role: user.role };
+        return {
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
       },
     }),
   ],
@@ -48,23 +64,45 @@ export const authOptions = {
     strategy: "jwt",
   },
   callbacks: {
+    // ---------------- JWT CALLBACK ----------------
     async jwt({ token, user, account }) {
       if (user) {
+        token.id = user.id.toString();
         token.accessToken = generateAccessToken(user);
         token.refreshToken = generateRefreshToken(user);
         token.role = user.role;
         token.accessTokenExpires = Date.now() + 15 * 60 * 1000;
+
+        console.log("✅ JWT callback user login:", {
+          tokenId: token.id,
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          expires: new Date(token.accessTokenExpires),
+        });
+      } else {
+        // Optional: check token expiry
+        if (token.accessTokenExpires && Date.now() > token.accessTokenExpires) {
+          console.log("⚠️ Access token expired, refresh required");
+          // Here you can implement refresh token logic
+        }
       }
       return token;
     },
+
+    // ---------------- SESSION CALLBACK ----------------
     async session({ session, token }) {
       session.user.id = token.id;
-      session.accessToken = token.accessToken;
       session.user.role = token.role;
+      session.accessToken = token.accessToken;
       session.refreshToken = token.refreshToken;
+
+      console.log("✅ Session callback:", session);
       return session;
     },
+
+    // ---------------- SIGNIN CALLBACK ----------------
     async signIn({ user, account }) {
+      console.log("🔑 SignIn callback:", { user, account });
       if (account?.provider === "google") {
         await connectToDB();
         const existingUser = await User.findOne({ email: user.email });
@@ -72,17 +110,24 @@ export const authOptions = {
           await User.create({
             name: user.name,
             email: user.email,
-            password: "",
+            password: "", // Google login does not require password
             provider: "google",
           });
+          console.log("✅ Google user created:", user.email);
+        } else {
+          console.log("ℹ️ Google user exists:", user.email);
         }
       }
       return true;
     },
   },
+  pages: {
+    signIn: "/login",
+    error: "/login?error=", // redirect to login page with error
+  },
 };
 
-// ✅ Pass authOptions to NextAuth
+// --- NextAuth handler ---
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

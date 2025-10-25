@@ -95,18 +95,74 @@ function Page() {
   const [name, setName] = useState("Your Name Here");
   const [recents, setRecents] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [shareableLink, setShareableLink] = useState(""); // ✅ NEW: Store shareable link
-  const [showLinkCopied, setShowLinkCopied] = useState(false); // ✅ NEW: Copy feedback
+  const [shareableLink, setShareableLink] = useState("");
+  const [showLinkCopied, setShowLinkCopied] = useState(false);
+  const [loadingResumes, setLoadingResumes] = useState(false);
   const { message, showMessage } = useAppMessages();
   const { data: session, status } = useSession();
 
-  // Load from localStorage
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("savedResumes") || "[]");
-    setRecents(saved);
-  }, []);
+  // Fetch saved resumes from backend
+  const fetchSavedResumes = async () => {
+    if (!session?.accessToken) {
+      console.log("No session token available for fetching resumes");
+      return;
+    }
 
-  // Save to localStorage when recents change
+    setLoadingResumes(true);
+    try {
+      const res = await fetch("https://my-backend-wo75.onrender.com/api/resume/all", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${session.accessToken}`, // ✅ FIXED
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log("Fetched resumes from backend:", data);
+        
+        // ✅ FIX: Access data.resumes array, not data directly
+        const resumesArray = data.resumes || [];
+        
+        // Transform backend data to match frontend format
+        const transformedResumes = resumesArray.map(resume => ({
+          id: resume._id || resume.id,
+          name: resume.name || resume.title,
+          content: resume.resumeData || resume.content,
+          link: `https://my-frontend1-2hth.vercel.app/preview/${resume.uniqueId || resume.id}`,
+          createdAt: resume.createdAt || resume.updatedAt
+        }));
+        
+        setRecents(transformedResumes);
+      } else {
+        console.error("Failed to fetch resumes:", res.status);
+        // Fallback to localStorage if backend fails
+        const saved = JSON.parse(localStorage.getItem("savedResumes") || "[]");
+        setRecents(saved);
+      }
+    } catch (error) {
+      console.error("Error fetching resumes:", error);
+      // Fallback to localStorage if network fails
+      const saved = JSON.parse(localStorage.getItem("savedResumes") || "[]");
+      setRecents(saved);
+    } finally {
+      setLoadingResumes(false);
+    }
+  };
+
+  // Load saved resumes when component mounts and when session changes
+  useEffect(() => {
+    if (session?.accessToken) {
+      fetchSavedResumes();
+    } else {
+      // Fallback to localStorage if not authenticated
+      const saved = JSON.parse(localStorage.getItem("savedResumes") || "[]");
+      setRecents(saved);
+    }
+  }, [session?.accessToken]);
+
+  // Save to localStorage as backup when recents change
   useEffect(() => {
     localStorage.setItem("savedResumes", JSON.stringify(recents));
   }, [recents]);
@@ -114,47 +170,97 @@ function Page() {
   const handleContentChange = (content) => setEditorContent(content);
 
   const handleSaveResume = async () => {
-  if (!name.trim()) {
-    showMessage("Please enter a valid name before saving.");
-    return;
-  }
-
-  try {
-    const res = await fetch("https://my-backend-wo75.onrender.com/api/resume/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name.trim(),
-        resumeData: editorContent,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (data.success) {
-      showMessage(`✅ Saved "${name}" successfully!`);
-      
-      // ✅ Construct the preview URL from uniqueId
-      const previewUrl = `https://my-frontend1-2hth.vercel.app/preview/${data.uniqueId}`;
-      setShareableLink(previewUrl);
-      
-      setRecents((prev) => [
-        { 
-          id: data.uniqueId || Date.now(), 
-          name: name.trim(), 
-          content: editorContent,
-          link: previewUrl  // ✅ Store the constructed link
-        },
-        ...prev,
-      ]);
-    } else {
-      showMessage(`⚠️ ${data.message}`);
+    if (!session) {
+      showMessage("⚠️ Please login to save your resume.");
+      return;
     }
-  } catch (err) {
-    console.error("Save error:", err);
-    showMessage("❌ Failed to save resume (server error)");
-  }
-};
+
+    if (!name.trim()) {
+      showMessage("Please enter a valid name before saving.");
+      return;
+    }
+   
+    try {
+      console.log("Session Data:", session);
+      console.log("Token Sent:", session?.accessToken);
+      
+      // Decode the JWT token to see its contents
+      try {
+        const tokenPayload = JSON.parse(atob(session.accessToken.split('.')[1]));
+        console.log("Token payload:", tokenPayload);
+        console.log("Token expires at:", new Date(tokenPayload.exp * 1000));
+        console.log("Current time:", new Date());
+        console.log("Token expired?", new Date() > new Date(tokenPayload.exp * 1000));
+        
+        // Check if token is expired
+        if (new Date() > new Date(tokenPayload.exp * 1000)) {
+          showMessage("❌ Your session has expired. Please login again.");
+          return;
+        }
+      } catch (e) {
+        console.error("Could not decode token:", e);
+      }
+  
+      const res = await fetch("https://my-backend-wo75.onrender.com/api/resume/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.accessToken}`, // ✅ FIXED: Direct access
+        },
+        body: JSON.stringify({
+          name: name.trim() || "My Resume",
+          resumeData: editorContent,
+          userId: session?.user?.id,
+        }),
+      });
+  
+      console.log("API raw response:", res);
+  
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        console.error("❌ Failed to parse JSON:", err);
+        showMessage("⚠️ Backend did not return JSON");
+        return;
+      }
+  
+      console.log("Backend JSON:", data);
+  
+      // Handle 401 unauthorized
+      if (res.status === 401) {
+        showMessage("❌ Authentication failed. Please check JWT_SECRET match between frontend & backend.");
+        console.error("JWT Token rejected by backend. Possible causes:");
+        console.error("1. NextAuth JWT_SECRET differs from Backend JWT_SECRET");
+        console.error("2. Backend middleware not configured correctly");
+        console.error("3. Token signature mismatch");
+        return;
+      }
+  
+      // Handle other server errors
+      if (!res.ok) {
+        showMessage(`❌ Server error ${res.status}: ${data?.message || res.statusText}`);
+        return;
+      }
+  
+       // Success case
+       if (data.success) {
+         showMessage(`✅ Saved "${name.trim()}" successfully!`);
+         const previewUrl = `https://my-frontend1-2hth.vercel.app/preview/${data.uniqueId}`;
+         setShareableLink(previewUrl);
+         
+         // Refresh the saved resumes list from backend
+         await fetchSavedResumes();
+       } else {
+         showMessage(`⚠️ ${data.message || "Failed to save resume"}`);
+       }
+  
+    } catch (error) {
+      console.error("Error in handleSaveResume:", error);
+      showMessage("⚠️ Failed to save resume. Try again later.");
+    }
+  };
+  
   const handleCopyLink = () => {
     if (shareableLink) {
       navigator.clipboard.writeText(shareableLink);
@@ -237,11 +343,42 @@ function Page() {
           ✖
         </button>
 
-        <h2 style={{ fontSize: "1.2rem", marginBottom: 15, marginTop: 35 }}>
-          📄 Saved Resumes
-        </h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 15, marginTop: 35 }}>
+          <h2 style={{ fontSize: "1.2rem", margin: 0 }}>
+            📄 Saved Resumes
+          </h2>
+          <button
+            onClick={fetchSavedResumes}
+            disabled={loadingResumes}
+            style={{
+              background: "transparent",
+              border: "1px solid #4B5563",
+              color: "#9CA3AF",
+              borderRadius: "4px",
+              padding: "4px 8px",
+              cursor: loadingResumes ? "not-allowed" : "pointer",
+              fontSize: "0.8rem",
+              opacity: loadingResumes ? 0.5 : 1
+            }}
+            title="Refresh resumes"
+          >
+            🔄
+          </button>
+        </div>
 
-        {recents.length === 0 ? (
+        {loadingResumes ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#9CA3AF" }}>
+            <div style={{ 
+              width: 16, 
+              height: 16, 
+              border: "2px solid #9CA3AF", 
+              borderTop: "2px solid transparent", 
+              borderRadius: "50%", 
+              animation: "spin 1s linear infinite" 
+            }}></div>
+            <span style={{ fontSize: "0.9rem" }}>Loading resumes...</span>
+          </div>
+        ) : recents.length === 0 ? (
           <p style={{ fontSize: "0.9rem", color: "#9CA3AF" }}>
             No resumes saved yet.
           </p>
@@ -442,23 +579,52 @@ function Page() {
             />
 
             <div style={{ marginBottom: 20 }}>
-              <motion.button
-                onClick={handleSaveResume}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
+              {session ? (
+                <motion.button
+                  onClick={handleSaveResume}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "#3b82f6",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  💾 Save Resume
+                </motion.button>
+              ) : (
+                <div style={{
+                  padding: "15px",
                   borderRadius: 8,
-                  border: "none",
-                  background: "#3b82f6",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                💾 Save Resume
-              </motion.button>
+                  border: "2px solid #f59e0b",
+                  backgroundColor: "#fef3c7",
+                  textAlign: "center"
+                }}>
+                  <p style={{
+                    margin: "0 0 10px 0",
+                    color: "#92400e",
+                    fontWeight: 600
+                  }}>
+                    🔒 Login Required to Save
+                  </p>
+                  <Link href="/login" style={{
+                    display: "inline-block",
+                    padding: "8px 16px",
+                    backgroundColor: "#f59e0b",
+                    color: "white",
+                    textDecoration: "none",
+                    borderRadius: 6,
+                    fontWeight: 600
+                  }}>
+                    Login to Save Resume
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* ✅ SHAREABLE LINK SECTION */}
