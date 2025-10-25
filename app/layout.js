@@ -4,6 +4,7 @@ import "./globals.css";
 import Hotjar from "@/components/Hotjar";
 import SessionWrapper from "@/components/SessionWrapper";
 import Buttons from "@/components/Buttons";
+import HotjarTest from "@/components/HotjarTest";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,14 +17,17 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <Hotjar/>
         <link rel="icon" href="/favicon.png"/>
       </head>
       <body className={inter.className}>
+        {/* Hotjar tracking script */}
+        <Hotjar/>
         {/* Wrap the entire application with the Providers component */}
         <SessionWrapper>
           <Buttons/>
           {children}
+          {/* Hotjar test component - remove this after verification */}
+          <HotjarTest/>
         </SessionWrapper>
       </body>
     </html>
