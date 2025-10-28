@@ -27,7 +27,7 @@ export default function RootLayout({ children }) {
           <Buttons/>
           {children}
           {/* Hotjar test component - remove this after verification */}
-          <HotjarTest/>
+          
         </SessionWrapper>
       </body>
     </html>

@@ -167,7 +167,7 @@ export default function App() {
               <div className="p-6 border rounded-xl shadow-lg hover:shadow-2xl transition duration-300">
                 <div className="text-4xl mb-4">{feature.icon}</div>
                 <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-                <p className="text-gray-500">Lorem ipsum dolor sit amet consectetur adipisicing elit. Nostrum, est.</p>
+                <p className="text-gray-500">Have Man Templated for professional resume.</p>
               </div>
             </ClipRevealTextScroll>
           ))}
